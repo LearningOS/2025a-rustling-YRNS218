@@ -54,9 +54,8 @@ impl<T> Default for Queue<T> {
 
 pub struct myStack<T>
 {
-	//TODO
-	q1:Queue<T>,
-	q2:Queue<T>
+q1: Queue<T>,
+    q2: Queue<T>,
 }
 impl<T> myStack<T> {
     pub fn new() -> Self {
@@ -67,15 +66,19 @@ impl<T> myStack<T> {
         }
     }
     pub fn push(&mut self, elem: T) {
-        //TODO
+         if self.q1.is_empty() {
+            self.q2.enqueue(elem);
+        } else {
+            self.q1.enqueue(elem);
+        }
+    }
     }
     pub fn pop(&mut self) -> Result<T, &str> {
-        //TODO
+        if self.is_empty() {
 		Err("Stack is empty")
     }
     pub fn is_empty(&self) -> bool {
-		//TODO
-        true
+		self.q1.is_empty() && self.q2.is_empty()
     }
 }
 
