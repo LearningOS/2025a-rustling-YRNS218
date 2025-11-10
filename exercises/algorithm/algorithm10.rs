@@ -28,8 +28,13 @@ impl Graph for UndirectedGraph {
     fn adjacency_table(&self) -> &HashMap<String, Vec<(String, i32)>> {
         &self.adjacency_table
     }
-    fn add_edge(&mut self, edge: (&str, &str, i32)) {
-        //TODO
+    fn add_edge(&mut self, from: String, to: String, weight: i32) -> Result<(), NodeNotInGraph> {
+        if !self.contains(&from) {
+            return Err(NodeNotInGraph(from));
+        }
+        if !self.contains(&to) {
+            return Err(NodeNotInGraph(to));
+        }
     }
 }
 pub trait Graph {
@@ -37,11 +42,10 @@ pub trait Graph {
     fn adjacency_table_mutable(&mut self) -> &mut HashMap<String, Vec<(String, i32)>>;
     fn adjacency_table(&self) -> &HashMap<String, Vec<(String, i32)>>;
     fn add_node(&mut self, node: &str) -> bool {
-        //TODO
+       self.adjacency_table_mutable().entry(node).or_insert_with(Vec::new);
 		true
     }
-    fn add_edge(&mut self, edge: (&str, &str, i32)) {
-        //TODO
+   fn add_edge(&mut self, from: String, to: String, weight: i32) -> Result<(), NodeNotInGraph>;
     }
     fn contains(&self, node: &str) -> bool {
         self.adjacency_table().get(node).is_some()
