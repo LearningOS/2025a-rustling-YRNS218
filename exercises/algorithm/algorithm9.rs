@@ -37,7 +37,12 @@ where
     }
 
     pub fn add(&mut self, value: T) {
-        //TODO
+          if self.count + 1 == self.items.len() {
+            self.items.push(T::default());
+        }
+        self.items[self.count + 1] = value;
+        self.count += 1;
+        self.bubble_up(self.count);
     }
 
     fn parent_idx(&self, idx: usize) -> usize {
@@ -57,8 +62,16 @@ where
     }
 
     fn smallest_child_idx(&self, idx: usize) -> usize {
-        //TODO
-		0
+         let left = self.left_child_idx(idx);
+        let right = self.right_child_idx(idx);
+
+        // 若右孩子存在且更符合比较器规则，则返回右孩子索引
+        if right <= self.count && (self.comparator)(&self.items[right], &self.items[left]) {
+            right
+        } else {
+            left
+        }
+		
     }
 }
 
@@ -83,9 +96,8 @@ where
 {
     type Item = T;
 
-    fn next(&mut self) -> Option<T> {
-        //TODO
-		None
+    fn next(&mut self) -> Option<Self::Item> {
+        self.pop()
     }
 }
 
