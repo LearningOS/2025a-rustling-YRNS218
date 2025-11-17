@@ -1,29 +1,19 @@
-// hashmaps1.rs
-//
-// A basket of fruits in the form of a hash map needs to be defined. The key
-// represents the name of the fruit and the value represents how many of that
-// particular fruit is in the basket. You have to put at least three different
-// types of fruits (e.g apple, banana, mango) in the basket and the total count
-// of all the fruits should be at least five.
-//
-// Make me compile and pass the tests!
-//
-// Execute `rustlings hint hashmaps1` or use the `hint` watch subcommand for a
-// hint.
+// This powerful wrapper provides the ability to store a positive integer value.
+// Rewrite it using generics so that it supports wrapping ANY type.
+// Execute `rustlings hint generics2` or use the `hint` watch subcommand for a hint.
 
 // I AM NOT DONE
 
-use std::collections::HashMap;
+// 结构体泛型化：使用类型参数 T 替代具体类型 u32
+struct Wrapper<T> {
+    value: T,
+}
 
-fn fruit_basket() -> HashMap<String, u32> {
-    let mut basket = // TODO: declare your hash map here.
-
-    // Two bananas are already given for you :)
-    basket.insert(String::from("banana"), 2);
-
-    // TODO: Put more fruits in your basket here.
-
-    basket
+// 实现泛型化：为所有 T 类型实现 Wrapper<T> 的方法
+impl<T> Wrapper<T> {
+    pub fn new(value: T) -> Self {
+        Wrapper { value }
+    }
 }
 
 #[cfg(test)]
@@ -31,14 +21,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn at_least_three_types_of_fruits() {
-        let basket = fruit_basket();
-        assert!(basket.len() >= 3);
+    fn store_u32_in_wrapper() {
+        assert_eq!(Wrapper::new(42).value, 42);
     }
 
     #[test]
-    fn at_least_five_fruits() {
-        let basket = fruit_basket();
-        assert!(basket.values().sum::<u32>() >= 5);
+    fn store_str_in_wrapper() {
+        assert_eq!(Wrapper::new("Foo").value, "Foo");
     }
 }
