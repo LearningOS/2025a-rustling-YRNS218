@@ -9,6 +9,7 @@ fn main() {
     println!("The square of 3 is {}", answer);
 }
 
+// 计算数字的平方：接收i32类型参数，返回其平方值（i32类型）
 fn square(num: i32) -> i32 {
     num * num
 }
