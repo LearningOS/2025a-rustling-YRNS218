@@ -1,11 +1,7 @@
 // structs2.rs
-//
-// Address all the TODOs to make the tests pass!
-//
+// Address all the TODOS to make the tests pass!
 // Execute `rustlings hint structs2` or use the `hint` watch subcommand for a
 // hint.
-
-// I AM NOT DONE
 
 #[derive(Debug)]
 struct Order {
@@ -37,8 +33,13 @@ mod tests {
     #[test]
     fn your_order() {
         let order_template = create_order_template();
-        // TODO: Create your own order using the update syntax and template above!
-        // let your_order =
+        // 使用结构体更新语法基于模板创建新订单，仅修改需要变更的字段
+        let your_order = Order {
+            name: String::from("Hacker in Rust"), // 修改name字段
+            count: 1, // 修改count字段
+            ..order_template // 其余字段继承自模板
+        };
+
         assert_eq!(your_order.name, "Hacker in Rust");
         assert_eq!(your_order.year, order_template.year);
         assert_eq!(your_order.made_by_phone, order_template.made_by_phone);
