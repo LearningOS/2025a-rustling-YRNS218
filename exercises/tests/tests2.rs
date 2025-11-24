@@ -1,17 +1,25 @@
-// tests2.rs
-//
-// This test has a problem with it -- make the test compile! Make the test pass!
-// Make the test fail!
-//
-// Execute `rustlings hint tests2` or use the `hint` watch subcommand for a
+// tests3.rs
+// This test isn't testing our function -- make it do that in such a way that
+// the test passes. Then write a second test that tests that we get the result
+// we expect to get when we call `is_even(5)`.
+// Execute `rustlings hint tests3` or use the `hint` watch subcommand for a
 // hint.
 
-// I AM NOT DONE
+pub fn is_even(num: i32) -> bool {
+    num % 2 == 0
+}
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
-    fn you_can_assert_eq() {
-        assert_eq!();
+    fn is_true_when_even() {
+        assert!(is_even(4)); // 测试偶数返回true
+    }
+
+    #[test]
+    fn is_false_when_odd() {
+        assert!(!is_even(5)); // 测试奇数返回false
     }
 }
