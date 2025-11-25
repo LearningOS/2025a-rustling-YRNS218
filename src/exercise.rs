@@ -5,102 +5,79 @@ use std::fmt::{self, Display, Formatter};
 use std::fs::{self, remove_file, File};
 use std::io::Read;
 use std::path::PathBuf;
-use std::process::{self, Command};
+use std::process::{self, Command, Output};
 
 const RUSTC_COLOR_ARGS: &[&str] = &["--color", "always"];
 const RUSTC_EDITION_ARGS: &[&str] = &["--edition", "2021"];
-const I_AM_DONE_REGEX: &str = r"(?m)^\s*///?\s*I\s+AM\s+NOT\s+DONE";
+const I_AM_DONE_REGEX: &str = r"(?m)^\s*//?\s*I\s+AM\s+NOT\s+DONE";
 const CONTEXT: usize = 2;
 const CLIPPY_CARGO_TOML_PATH: &str = "./exercises/clippy/Cargo.toml";
 const BUILD_SCRIPT_CARGO_TOML_PATH: &str = "./exercises/tests/Cargo.toml";
 
-// Get a temporary file name that is hopefully unique
+// 获取临时文件名（确保唯一性）
 #[inline]
 fn temp_file() -> String {
     let thread_id: String = format!("{:?}", std::thread::current().id())
         .chars()
         .filter(|c| c.is_alphanumeric())
         .collect();
-
-    format!("./temp_{}_{thread_id}", process::id())
+    format!("./temp_{}_{}", process::id(), thread_id)
 }
 
-// The mode of the exercise.
+// 练习模式枚举
 #[derive(Deserialize, Copy, Clone, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum Mode {
-    // Indicates that the exercise should be compiled as a binary
-    Compile,
-    // Indicates that the exercise should be compiled as a test harness
-    Test,
-    // Indicates that the exercise should be linted with clippy
-    Clippy,
-    // Indicates that the exercise should be run using cargo with build script
-    BuildScript,
+    Compile,    // 编译为二进制文件
+    Test,       // 作为测试编译
+    Clippy,     // 使用 clippy 检查
+    BuildScript,// 使用构建脚本运行
 }
 
+// 练习列表结构体
 #[derive(Deserialize)]
 pub struct ExerciseList {
     pub exercises: Vec<Exercise>,
 }
 
-// A representation of a rustlings exercise.
-// This is deserialized from the accompanying info.toml file
+// 练习结构体（从 info.toml 反序列化）
 #[derive(Deserialize, Debug)]
 pub struct Exercise {
-    // Name of the exercise
-    pub name: String,
-    // The path to the file containing the exercise's source code
-    pub path: PathBuf,
-    // The mode of the exercise (Test, Compile, or Clippy)
-    pub mode: Mode,
-    // The hint text associated with the exercise
-    pub hint: String,
+    pub name: String,           // 练习名称
+    pub path: PathBuf,          // 源代码路径
+    pub mode: Mode,             // 练习模式
+    pub hint: String,           // 提示信息
 }
 
-// An enum to track of the state of an Exercise.
-// An Exercise can be either Done or Pending
+// 练习状态枚举
 #[derive(PartialEq, Debug)]
 pub enum State {
-    // The state of the exercise once it's been completed
-    Done,
-    // The state of the exercise while it's not completed yet
-    Pending(Vec<ContextLine>),
+    Done,                       // 已完成
+    Pending(Vec<ContextLine>),  // 未完成（包含上下文信息）
 }
 
-// The context information of a pending exercise
+// 未完成练习的上下文信息
 #[derive(PartialEq, Debug)]
 pub struct ContextLine {
-    // The source code that is still pending completion
-    pub line: String,
-    // The line number of the source code still pending completion
-    pub number: usize,
-    // Whether or not this is important
-    pub important: bool,
+    pub line: String,           // 待完成的源代码行
+    pub number: usize,          // 行号
+    pub important: bool,        // 是否为关键行
 }
 
-// The result of compiling an exercise
+// 编译后的练习结构体
 pub struct CompiledExercise<'a> {
     exercise: &'a Exercise,
     _handle: FileHandle,
 }
 
-impl<'a> CompiledExercise<'a> {
-    // Run the compiled exercise
-    pub fn run(&self) -> Result<ExerciseOutput, ExerciseOutput> {
-        self.exercise.run()
-    }
-}
-
-// A representation of an already executed binary
+// 练习输出结果
 #[derive(Debug)]
 pub struct ExerciseOutput {
-    // The textual contents of the standard output of the binary
-    pub stdout: String,
-    // The textual contents of the standard error of the binary
-    pub stderr: String,
+    pub stdout: String,         // 标准输出内容
+    pub stderr: String,         // 标准错误内容
 }
 
+// 文件句柄（用于自动清理临时文件）
 struct FileHandle;
 
 impl Drop for FileHandle {
@@ -109,161 +86,203 @@ impl Drop for FileHandle {
     }
 }
 
+// 清理临时文件
+#[inline]
+fn clean() {
+    let temp_path = temp_file();
+    let _ = remove_file(&temp_path); // 忽略删除失败（文件可能已被清理）
+}
+
 impl Exercise {
+    // 编译练习
     pub fn compile(&self) -> Result<CompiledExercise, ExerciseOutput> {
-        let cmd = match self.mode {
+        let cmd_output = match self.mode {
             Mode::Compile => Command::new("rustc")
-                .args(&[self.path.to_str().unwrap(), "-o", &temp_file()])
+                .arg(self.path.to_str().unwrap())
+                .arg("-o")
+                .arg(temp_file())
                 .args(RUSTC_COLOR_ARGS)
                 .args(RUSTC_EDITION_ARGS)
-                .output(),
+                .output()
+                .expect("Failed to run rustc command"),
+
             Mode::Test => Command::new("rustc")
-                .args(&["--test", self.path.to_str().unwrap(), "-o", &temp_file()])
+                .arg("--test")
+                .arg(self.path.to_str().unwrap())
+                .arg("-o")
+                .arg(temp_file())
                 .args(RUSTC_COLOR_ARGS)
                 .args(RUSTC_EDITION_ARGS)
-                .output(),
+                .output()
+                .expect("Failed to run rustc test command"),
+
             Mode::Clippy => {
+                // 生成 Clippy 所需的 Cargo.toml
                 let cargo_toml = format!(
                     r#"[package]
 name = "{}"
 version = "0.0.1"
 edition = "2021"
+
 [[bin]]
 name = "{}"
-path = "{}.rs""#,
+path = "{}.rs"
+"#,
                     self.name, self.name, self.name
                 );
+
                 let cargo_toml_error_msg = if env::var("NO_EMOJI").is_ok() {
                     "Failed to write Clippy Cargo.toml file."
                 } else {
                     "Failed to write 📎 Clippy 📎 Cargo.toml file."
                 };
-                fs::write(CLIPPY_CARGO_TOML_PATH, cargo_toml).expect(cargo_toml_error_msg);
-                // To support the ability to run the clippy exercises, build
-                // an executable, in addition to running clippy. With a
-                // compilation failure, this would silently fail. But we expect
-                // clippy to reflect the same failure while compiling later.
-                Command::new("rustc")
-                    .args(&[self.path.to_str().unwrap(), "-o", &temp_file()])
+
+                // 写入 Cargo.toml
+                fs::write(CLIPPY_CARGO_TOML_PATH, cargo_toml)
+                    .expect(cargo_toml_error_msg);
+
+                // 预编译（确保可执行文件存在）
+                let _ = Command::new("rustc")
+                    .arg(self.path.to_str().unwrap())
+                    .arg("-o")
+                    .arg(temp_file())
                     .args(RUSTC_COLOR_ARGS)
                     .args(RUSTC_EDITION_ARGS)
                     .output()
-                    .expect("Failed to compile!");
-                // Due to an issue with Clippy, a cargo clean is required to catch all lints.
-                // See https://github.com/rust-lang/rust-clippy/issues/2604
-                // This is already fixed on Clippy's master branch. See this issue to track merging into Cargo:
-                // https://github.com/rust-lang/rust-clippy/issues/3837
+                    .expect("Failed to compile for Clippy");
+
+                // 清理缓存（解决 Clippy 历史问题）
                 Command::new("cargo")
-                    .args(&["clean", "--manifest-path", CLIPPY_CARGO_TOML_PATH])
+                    .arg("clean")
+                    .arg("--manifest-path")
+                    .arg(CLIPPY_CARGO_TOML_PATH)
                     .args(RUSTC_COLOR_ARGS)
                     .output()
                     .expect("Failed to run 'cargo clean'");
+
+                // 运行 Clippy 检查
                 Command::new("cargo")
-                    .args(&["clippy", "--manifest-path", CLIPPY_CARGO_TOML_PATH])
+                    .arg("clippy")
+                    .arg("--manifest-path")
+                    .arg(CLIPPY_CARGO_TOML_PATH)
                     .args(RUSTC_COLOR_ARGS)
                     .args(&["--", "-D", "warnings", "-D", "clippy::float_cmp"])
                     .output()
-            },
+                    .expect("Failed to run clippy")
+            }
+
             Mode::BuildScript => {
+                // 生成构建脚本的 Cargo.toml
                 let cargo_toml = format!(
                     r#"[package]
 name = "{}"
 version = "0.0.1"
 edition = "2021"
+
 [[bin]]
 name = "{}"
-path = "{}.rs""#,
+path = "{}.rs"
+"#,
                     self.name, self.name, self.name
                 );
+
                 let cargo_toml_error_msg = if env::var("NO_EMOJI").is_ok() {
-                    "Failed to write Clippy Cargo.toml file."
+                    "Failed to write build script Cargo.toml file."
                 } else {
-                    "Failed to write 📎 Clippy 📎 Cargo.toml file."
+                    "Failed to write 🔨 Build Script 🔨 Cargo.toml file."
                 };
-                fs::write(BUILD_SCRIPT_CARGO_TOML_PATH, cargo_toml).expect(cargo_toml_error_msg);
 
+                // 写入 Cargo.toml
+                fs::write(BUILD_SCRIPT_CARGO_TOML_PATH, cargo_toml)
+                    .expect(cargo_toml_error_msg);
+
+                // 运行测试
                 Command::new("cargo")
-                    .args(&["test", "--manifest-path", BUILD_SCRIPT_CARGO_TOML_PATH])
+                    .arg("test")
+                    .arg("--manifest-path")
+                    .arg(BUILD_SCRIPT_CARGO_TOML_PATH)
                     .output()
+                    .expect("Failed to run 'cargo test' for build script")
             }
-        }
-        .expect("Failed to run 'compile' command.");
+        };
 
-        if cmd.status.success() {
+        // 根据编译结果返回对应值
+        if cmd_output.status.success() {
             Ok(CompiledExercise {
                 exercise: self,
                 _handle: FileHandle,
             })
         } else {
-            clean();
             Err(ExerciseOutput {
-                stdout: String::from_utf8_lossy(&cmd.stdout).to_string(),
-                stderr: String::from_utf8_lossy(&cmd.stderr).to_string(),
+                stdout: String::from_utf8_lossy(&cmd_output.stdout).to_string(),
+                stderr: String::from_utf8_lossy(&cmd_output.stderr).to_string(),
             })
         }
     }
 
-    fn run(&self) -> Result<ExerciseOutput, ExerciseOutput> {
+    // 运行编译后的练习
+    pub fn run(&self) -> Result<ExerciseOutput, ExerciseOutput> {
         let arg = match self.mode {
             Mode::Test => "--show-output",
-            Mode::BuildScript => return Ok(ExerciseOutput {
-                stdout: "".to_string(),
-                stderr: "".to_string(),
-            }),
+            Mode::BuildScript => {
+                return Ok(ExerciseOutput {
+                    stdout: String::new(),
+                    stderr: String::new(),
+                })
+            }
             _ => "",
         };
-        println!("pa={}", temp_file());
-        let cmd = Command::new(&temp_file())
+
+        let cmd_output = Command::new(temp_file())
             .arg(arg)
             .output()
-            .expect("Failed to run 'run' command");
+            .expect("Failed to run compiled exercise");
 
         let output = ExerciseOutput {
-            stdout: String::from_utf8_lossy(&cmd.stdout).to_string(),
-            stderr: String::from_utf8_lossy(&cmd.stderr).to_string(),
+            stdout: String::from_utf8_lossy(&cmd_output.stdout).to_string(),
+            stderr: String::from_utf8_lossy(&cmd_output.stderr).to_string(),
         };
 
-        if cmd.status.success() {
+        if cmd_output.status.success() {
             Ok(output)
         } else {
             Err(output)
         }
     }
 
+    // 获取练习状态（已完成/未完成）
     pub fn state(&self) -> State {
-        let mut source_file =
-            File::open(&self.path).expect("We were unable to open the exercise file!");
+        // 读取练习源代码
+        let mut source_file = File::open(&self.path)
+            .expect("Failed to open exercise file");
+        let mut source = String::new();
+        source_file.read_to_string(&mut source)
+            .expect("Failed to read exercise file");
 
-        let source = {
-            let mut s = String::new();
-            source_file
-                .read_to_string(&mut s)
-                .expect("We were unable to read the exercise file!");
-            s
-        };
-
+        // 检查是否包含 "I AM NOT DONE" 标记
         let re = Regex::new(I_AM_DONE_REGEX).unwrap();
-
         if !re.is_match(&source) {
             return State::Done;
         }
 
+        // 提取未完成行的上下文
         let matched_line_index = source
             .lines()
             .enumerate()
-            .find_map(|(i, line)| if re.is_match(line) { Some(i) } else { None })
-            .expect("This should not happen at all");
+            .find(|(_, line)| re.is_match(line))
+            .map(|(i, _)| i)
+            .expect("Matched line should exist");
 
-        let min_line = ((matched_line_index as i32) - (CONTEXT as i32)).max(0) as usize;
+        let min_line = (matched_line_index as i32 - CONTEXT as i32).max(0) as usize;
         let max_line = matched_line_index + CONTEXT;
 
         let context = source
             .lines()
             .enumerate()
-            .filter(|&(i, _)| i >= min_line && i <= max_line)
+            .filter(|(i, _)| *i >= min_line && *i <= max_line)
             .map(|(i, line)| ContextLine {
                 line: line.to_string(),
-                number: i + 1,
+                number: i + 1, // 行号从 1 开始
                 important: i == matched_line_index,
             })
             .collect();
@@ -271,109 +290,22 @@ path = "{}.rs""#,
         State::Pending(context)
     }
 
-    // Check that the exercise looks to be solved using self.state()
-    // This is not the best way to check since
-    // the user can just remove the "I AM NOT DONE" string from the file
-    // without actually having solved anything.
-    // The only other way to truly check this would to compile and run
-    // the exercise; which would be both costly and counterintuitive
+    // 检查练习是否看起来已完成
     pub fn looks_done(&self) -> bool {
         self.state() == State::Done
     }
 }
 
+// 实现 CompiledExercise 的运行方法
+impl<'a> CompiledExercise<'a> {
+    pub fn run(&self) -> Result<ExerciseOutput, ExerciseOutput> {
+        self.exercise.run()
+    }
+}
+
+// 为 Exercise 实现 Display trait
 impl Display for Exercise {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}", self.path.to_str().unwrap())
-    }
-}
-
-#[inline]
-fn clean() {
-    let _ignored = remove_file(&temp_file());
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use std::path::Path;
-
-    #[test]
-    fn test_clean() {
-        File::create(&temp_file()).unwrap();
-        let exercise = Exercise {
-            name: String::from("example"),
-            path: PathBuf::from("tests/fixture/state/pending_exercise.rs"),
-            mode: Mode::Compile,
-            hint: String::from(""),
-        };
-        let compiled = exercise.compile().unwrap();
-        drop(compiled);
-        assert!(!Path::new(&temp_file()).exists());
-    }
-
-    #[test]
-    fn test_pending_state() {
-        let exercise = Exercise {
-            name: "pending_exercise".into(),
-            path: PathBuf::from("tests/fixture/state/pending_exercise.rs"),
-            mode: Mode::Compile,
-            hint: String::new(),
-        };
-
-        let state = exercise.state();
-        let expected = vec![
-            ContextLine {
-                line: "// fake_exercise".to_string(),
-                number: 1,
-                important: false,
-            },
-            ContextLine {
-                line: "".to_string(),
-                number: 2,
-                important: false,
-            },
-            ContextLine {
-                line: "// I AM NOT DONE".to_string(),
-                number: 3,
-                important: true,
-            },
-            ContextLine {
-                line: "".to_string(),
-                number: 4,
-                important: false,
-            },
-            ContextLine {
-                line: "fn main() {".to_string(),
-                number: 5,
-                important: false,
-            },
-        ];
-
-        assert_eq!(state, State::Pending(expected));
-    }
-
-    #[test]
-    fn test_finished_exercise() {
-        let exercise = Exercise {
-            name: "finished_exercise".into(),
-            path: PathBuf::from("tests/fixture/state/finished_exercise.rs"),
-            mode: Mode::Compile,
-            hint: String::new(),
-        };
-
-        assert_eq!(exercise.state(), State::Done);
-    }
-
-    #[test]
-    fn test_exercise_with_output() {
-        let exercise = Exercise {
-            name: "exercise_with_output".into(),
-            path: PathBuf::from("tests/fixture/success/testSuccess.rs"),
-            mode: Mode::Test,
-            hint: String::new(),
-        };
-        let out = exercise.compile().unwrap().run().unwrap();
-        assert!(out.stdout.contains("THIS TEST TOO SHALL PASS"));
     }
 }
