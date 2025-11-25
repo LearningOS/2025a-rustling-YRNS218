@@ -1,64 +1,42 @@
-// quiz2.rs
+// vecs2.rs
+// A Vec of even numbers is given. Your task is to complete the loop so that
+// each number in the Vec is multiplied by 2.
+// Make me pass the test!
 //
-// This is a quiz for the following sections:
-// - Strings
-// - Vecs
-// - Move semantics
-// - Modules
-// - Enums
-//
-// Let's build a little machine in the form of a function. As input, we're going
-// to give a list of strings and commands. These commands determine what action
-// is going to be applied to the string. It can either be:
-// - Uppercase the string
-// - Trim the string
-// - Append "bar" to the string a specified amount of times
-// The exact form of this will be:
-// - The input is going to be a Vector of a 2-length tuple,
-//   the first element is the string, the second one is the command.
-// - The output element is going to be a Vector of strings.
-//
-// No hints this time!
+// Execute `rustlings hint vecs2` or use the `hint` watch subcommand for a hint.
 
-// I AM NOT DONE
-
-pub enum Command {
-    Uppercase,
-    Trim,
-    Append(usize),
+fn vec_loop(mut v: Vec<i32>) -> Vec<i32> {
+    for element in v.iter_mut() {
+        // 对每个元素乘以2（通过可变引用修改原向量中的值）
+        *element *= 2;
+    }
+    v
 }
 
-mod my_module {
-    use super::Command;
-
-    // TODO: Complete the function signature!
-    pub fn transformer(input: ???) -> ??? {
-        // TODO: Complete the output declaration!
-        let mut output: ??? = vec![];
-        for (string, command) in input.iter() {
-            // TODO: Complete the function body. You can do it!
-        }
-        output
-    }
+fn vec_map(v: &Vec<i32>) -> Vec<i32> {
+    v.iter()
+        .map(|element| {
+            // 返回每个元素乘以2的结果（不修改原向量，生成新向量）
+            *element * 2
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
-    // TODO: What do we need to import to have `transformer` in scope?
-    use ???;
-    use super::Command;
+    use super::*;
 
     #[test]
-    fn it_works() {
-        let output = transformer(vec![
-            ("hello".into(), Command::Uppercase),
-            (" all roads lead to rome! ".into(), Command::Trim),
-            ("foo".into(), Command::Append(1)),
-            ("bar".into(), Command::Append(5)),
-        ]);
-        assert_eq!(output[0], "HELLO");
-        assert_eq!(output[1], "all roads lead to rome!");
-        assert_eq!(output[2], "foobar");
-        assert_eq!(output[3], "barbarbarbarbarbar");
+    fn test_vec_loop() {
+        let v: Vec<i32> = (1..).filter(|x| x % 2 == 0).take(5).collect();
+        let ans = vec_loop(v.clone());
+        assert_eq!(ans, v.iter().map(|x| x * 2).collect::<Vec<i32>>());
+    }
+
+    #[test]
+    fn test_vec_map() {
+        let v: Vec<i32> = (1..).filter(|x| x % 2 == 0).take(5).collect();
+        let ans = vec_map(&v);
+        assert_eq!(ans, v.iter().map(|x| x * 2).collect::<Vec<i32>>());
     }
 }
