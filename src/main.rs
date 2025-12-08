@@ -1,12 +1,7 @@
-use crate::exercise::{Exercise, ExerciseList};
-use crate::project::RustAnalyzerProject;
-use crate::run::{reset, run};
-use crate::verify::verify;
-use argh::FromArgs;
-use console::Emoji;
-use notify::DebouncedEvent;
-use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use serde::{Deserialize, Serialize};
+#![edition = "2021"]
+#![deny(warnings)]
+
+// 标准库导入
 use std::ffi::OsStr;
 use std::fs;
 use std::io::{self, prelude::*};
@@ -19,15 +14,15 @@ use std::thread;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[macro_use]
-mod ui;
+// 外部依赖导入（需在 Cargo.toml 中声明）
+use argh::FromArgs;
+use console::Emoji;
+use notify::DebouncedEvent;
+use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use serde::{Deserialize, Serialize};
+use tokio::task;
 
-mod exercise;
-mod project;
-mod run;
-mod verify;
-
-// 补全 ui 模块的宏定义
+// ======================== 宏定义 ========================
 #[macro_export]
 macro_rules! println_success {
     ($($arg:tt)*) => {
@@ -42,18 +37,23 @@ macro_rules! println_error {
     };
 }
 
-// In sync with crate version
+// ======================== 常量定义 ========================
+const WELCOME: &str = "Welcome to Rustlings!";
+const DEFAULT_OUT: &str = "Please use a subcommand. Run `rustlings --help` for more information.";
+const FINISH_LINE: &str = "You have completed all exercises! Great job!";
 const VERSION: &str = "5.5.1";
 
+// ======================== 命令行参数定义 ========================
 #[derive(FromArgs, PartialEq, Debug)]
-/// Rustlings is a collection of small exercises to get you used to writing and reading Rust code
+/// Rustlings: 轻量级 Rust 练习工具
 struct Args {
-    /// show outputs from the test exercises
+    /// 显示测试/编译输出
     #[argh(switch)]
     nocapture: bool,
-    /// show the executable version
+    /// 显示版本号
     #[argh(switch, short = 'v')]
     version: bool,
+    /// 子命令
     #[argh(subcommand)]
     nested: Option<Subcommands>,
 }
@@ -72,100 +72,101 @@ enum Subcommands {
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
-#[argh(subcommand, name = "cicvverify", description = "cicvverify")]
+#[argh(subcommand, name = "cicvverify", description = "批量验证所有练习并生成报告")]
 struct CicvVerifyArgs {}
 
 #[derive(FromArgs, PartialEq, Debug)]
 #[argh(subcommand, name = "verify")]
-/// Verifies all exercises according to the recommended order
+/// 按推荐顺序验证所有练习
 struct VerifyArgs {}
 
 #[derive(FromArgs, PartialEq, Debug)]
 #[argh(subcommand, name = "watch")]
-/// Reruns `verify` when files were edited
+/// 文件修改时自动重新验证
 struct WatchArgs {
-    /// show hints on success
+    /// 验证成功时显示提示
     #[argh(switch)]
     success_hints: bool,
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
 #[argh(subcommand, name = "run")]
-/// Runs/Tests a single exercise
+/// 运行/测试单个练习
 struct RunArgs {
     #[argh(positional)]
-    /// the name of the exercise
+    /// 练习名称（或 "next" 运行下一个未完成练习）
     name: String,
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
 #[argh(subcommand, name = "reset")]
-/// Resets a single exercise using "git stash -- <filename>"
+/// 重置单个练习（模拟 git stash）
 struct ResetArgs {
     #[argh(positional)]
-    /// the name of the exercise
+    /// 练习名称
     name: String,
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
 #[argh(subcommand, name = "hint")]
-/// Returns a hint for the given exercise
+/// 获取单个练习的提示
 struct HintArgs {
     #[argh(positional)]
-    /// the name of the exercise
+    /// 练习名称
     name: String,
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
 #[argh(subcommand, name = "lsp")]
-/// Enable rust-analyzer for exercises
+/// 生成 rust-analyzer 配置文件
 struct LspArgs {}
 
 #[derive(FromArgs, PartialEq, Debug)]
 #[argh(subcommand, name = "list")]
-/// Lists the exercises available in Rustlings
+/// 列出所有可用练习
 struct ListArgs {
+    /// 仅显示练习路径
     #[argh(switch, short = 'p')]
-    /// show only the paths of the exercises
     paths: bool,
+    /// 仅显示练习名称
     #[argh(switch, short = 'n')]
-    /// show only the names of the exercises
     names: bool,
+    /// 过滤练习名称（逗号分隔）
     #[argh(option, short = 'f')]
-    /// provide a string to match exercise names
-    /// comma separated patterns are acceptable
     filter: Option<String>,
+    /// 仅显示未完成练习
     #[argh(switch, short = 'u')]
-    /// display only exercises not yet solved
     unsolved: bool,
+    /// 仅显示已完成练习
     #[argh(switch, short = 's')]
-    /// display only exercises that have been solved
     solved: bool,
 }
 
-#[derive(Deserialize, Serialize)]
+// ======================== 数据结构定义 ========================
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ExerciseCheckList {
     pub exercises: Vec<ExerciseResult>,
     pub user_name: Option<String>,
     pub statistics: ExerciseStatistics,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ExerciseResult {
     pub name: String,
     pub result: bool,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ExerciseStatistics {
-    pub total_exercations: usize,
+    pub total_exercises: usize,
     pub total_succeeds: usize,
     pub total_failures: usize,
     pub total_time: u32,
 }
 
-// 补全 exercise 模块的最小实现
+// ======================== Exercise 模块 ========================
 pub mod exercise {
+    use super::*;
     use serde::Deserialize;
     use std::path::PathBuf;
 
@@ -192,23 +193,68 @@ pub mod exercise {
     }
 
     impl Exercise {
+        /// 判断练习是否完成（简化实现：编译通过即完成）
         pub fn looks_done(&self) -> bool {
-            // 简化实现：实际应检查文件内容
-            false
+            match self.mode {
+                Mode::Compile => self.compile_check(),
+                Mode::Test => self.test_check(),
+                Mode::Clippy => self.clippy_check(),
+                Mode::BuildScript => self.compile_check(),
+            }
+        }
+
+        /// 编译检查
+        fn compile_check(&self) -> bool {
+            Command::new("rustc")
+                .arg(&self.path)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+        }
+
+        /// 测试检查
+        fn test_check(&self) -> bool {
+            Command::new("cargo")
+                .arg("test")
+                .arg("--manifest-path")
+                .arg(self.path.parent().unwrap().join("Cargo.toml"))
+                .arg("--")
+                .arg(self.path.file_stem().unwrap())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+        }
+
+        /// Clippy 检查
+        fn clippy_check(&self) -> bool {
+            Command::new("cargo")
+                .arg("clippy")
+                .arg("--manifest-path")
+                .arg(self.path.parent().unwrap().join("Cargo.toml"))
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
         }
     }
 }
 
-// 补全 project 模块的最小实现
+// ======================== Project 模块（LSP 支持） ========================
 pub mod project {
+    use super::*;
     use std::path::PathBuf;
 
     pub struct RustAnalyzerProject {
         pub crates: Vec<Crate>,
     }
 
-    #[derive(Debug)]
-    struct Crate {
+    #[derive(Debug, Clone)]
+    pub struct Crate {
         root_module: PathBuf,
     }
 
@@ -218,369 +264,251 @@ pub mod project {
         }
 
         pub fn get_sysroot_src(&mut self) -> std::io::Result<()> {
+            // 简化实现：实际需获取 Rust sysroot 路径
             Ok(())
         }
 
         pub fn exercises_to_json(&mut self) -> std::io::Result<()> {
+            // 简化实现：实际需解析练习生成 rust-project.json 内容
             Ok(())
         }
 
         pub fn write_to_disk(&self) -> std::io::Result<()> {
-            std::fs::write("rust-project.json", "{}")
-        }
-    }
-}
-
-// 补全 run 模块的最小实现
-pub mod run {
-    use super::exercise::Exercise;
-
-    pub fn run(_exercise: &Exercise, _verbose: bool) -> Result<(), ()> {
-        Ok(())
-    }
-
-    pub fn reset(_exercise: &Exercise) -> Result<(), ()> {
-        Ok(())
-    }
-}
-
-// 补全 verify 模块的最小实现
-pub mod verify {
-    use super::exercise::Exercise;
-
-    pub fn verify<I>(_exercises: I, _range: (usize, usize), _verbose: bool, _success_hints: bool) -> Result<(), &'static Exercise>
-    where
-        I: Iterator<Item = &'static Exercise>,
-    {
-        Ok(())
-    }
-}
-
-#[tokio::main]
-async fn main() {
-    let args: Args = argh::from_env();
-
-    if args.version {
-        println!("v{VERSION}");
-        std::process::exit(0);
-    }
-
-    if args.nested.is_none() {
-        println!("\n{WELCOME}\n");
-    }
-
-    if !Path::new("info.toml").exists() {
-        println!(
-            "{} must be run from the rustlings directory",
-            std::env::current_exe().unwrap().to_str().unwrap()
-        );
-        println!("Try `cd rustlings/`!");
-        std::process::exit(1);
-    }
-
-    if !rustc_exists() {
-        println!("We cannot find `rustc`.");
-        println!("Try running `rustc --version` to diagnose your problem.");
-        println!("For instructions on how to install Rust, check the README.");
-        std::process::exit(1);
-    }
-
-    let toml_str = &fs::read_to_string("info.toml").unwrap_or_else(|_| {
-        r#"
-        [exercises]
-        exercises = []
-        "#.to_string()
-    });
-    let exercises = toml::from_str::<exercise::ExerciseList>(toml_str)
-        .unwrap()
-        .exercises;
-    let verbose = args.nocapture;
-
-    let command = args.nested.unwrap_or_else(|| {
-        println!("{DEFAULT_OUT}\n");
-        std::process::exit(0);
-    });
-    match command {
-        Subcommands::List(subargs) => {
-            if !subargs.paths && !subargs.names {
-                println!("{:<17}\t{:<46}\t{:<7}", "Name", "Path", "Status");
-            }
-            let mut exercises_done: u16 = 0;
-            let filters = subargs.filter.clone().unwrap_or_default().to_lowercase();
-            exercises.iter().for_each(|e| {
-                let fname = format!("{}", e.path.display());
-                let filter_cond = filters
-                    .split(',')
-                    .filter(|f| !f.trim().is_empty())
-                    .any(|f| e.name.contains(&f) || fname.contains(&f));
-                let status = if e.looks_done() {
-                    exercises_done += 1;
-                    "Done"
-                } else {
-                    "Pending"
-                };
-                let solve_cond = {
-                    (e.looks_done() && subargs.solved)
-                        || (!e.looks_done() && subargs.unsolved)
-                        || (!subargs.solved && !subargs.unsolved)
-                };
-                if solve_cond && (filter_cond || subargs.filter.is_none()) {
-                    let line = if subargs.paths {
-                        format!("{fname}\n")
-                    } else if subargs.names {
-                        format!("{}\n", e.name)
-                    } else {
-                        format!("{:<17}\t{fname:<46}\t{status:<7}\n", e.name)
-                    };
-                    let stdout = std::io::stdout();
-                    {
-                        let mut handle = stdout.lock();
-                        handle.write_all(line.as_bytes()).unwrap_or_else(|e| {
-                            match e.kind() {
-                                std::io::ErrorKind::BrokenPipe => std::process::exit(0),
-                                _ => std::process::exit(1),
-                            };
-                        });
-                    }
-                }
-            });
-            let percentage_progress = exercises_done as f32 / exercises.len() as f32 * 100.0;
-            println!(
-                "Progress: You completed {} / {} exercises ({:.1} %).",
-                exercises_done,
-                exercises.len(),
-                percentage_progress
-            );
-            std::process::exit(0);
-        }
-
-        Subcommands::Run(subargs) => {
-            let exercise = find_exercise(&subargs.name, &exercises);
-            run(exercise, verbose).unwrap_or_else(|_| std::process::exit(1));
-        }
-
-        Subcommands::Reset(subargs) => {
-            let exercise = find_exercise(&subargs.name, &exercises);
-
-            reset(exercise).unwrap_or_else(|_| std::process::exit(1));
-        }
-
-        Subcommands::Hint(subargs) => {
-            let exercise = find_exercise(&subargs.name, &exercises);
-
-            println!("{}", exercise.hint);
-        }
-
-        Subcommands::Verify(_subargs) => {
-            verify(
-                &exercises.iter().collect::<Vec<_>>(),
-                (0, exercises.len()),
-                verbose,
-                false,
+            fs::write(
+                "rust-project.json",
+                r#"{
+                    "roots": ["./exercises"],
+                    "crates": []
+                }"#,
             )
-            .unwrap_or_else(|_| std::process::exit(1));
         }
-
-        Subcommands::CicvVerify(_subargs) => {
-            let now_start = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs();
-            let rights = Arc::new(Mutex::new(0));
-            let alls = exercises.len();
-
-            let exercise_check_list = Arc::new(Mutex::new(ExerciseCheckList {
-                exercises: vec![],
-                user_name: None,
-                statistics: ExerciseStatistics {
-                    total_exercations: alls,
-                    total_succeeds: 0,
-                    total_failures: 0,
-                    total_time: 0,
-                },
-            }));
-
-            let mut tasks = vec![];
-            for exercise in exercises {
-                let now_start = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs();
-                let inner_exercise = exercise;
-                let c_mutex = Arc::clone(&rights);
-                let exercise_check_list_ref = Arc::clone(&exercise_check_list);
-                let _verbose = verbose;
-                let t = tokio::task::spawn(async move {
-                    match run(&inner_exercise, true) {
-                        Ok(_) => {
-                            *c_mutex.lock().unwrap() += 1;
-                            println!("{}执行成功", inner_exercise.name);
-                            println!("总的题目数: {}", alls);
-                            println!("当前做正确的题目数: {}", *c_mutex.lock().unwrap());
-                            let now_end = SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .unwrap()
-                                .as_secs();
-                            println!("当前修改试卷耗时: {} s", now_end - now_start);
-                            exercise_check_list_ref.lock().unwrap().exercises.push(ExerciseResult {
-                                name: inner_exercise.name,
-                                result: true,
-                            });
-                            exercise_check_list_ref.lock().unwrap().statistics.total_succeeds += 1;
-                        }
-                        Err(_) => {
-                            println!("{}执行失败", inner_exercise.name);
-                            println!("总的题目数: {}", alls);
-                            println!("当前做正确的题目数: {}", *c_mutex.lock().unwrap());
-                            let now_end = SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .unwrap()
-                                .as_secs();
-                            println!("当前修改试卷耗时: {} s", now_end - now_start);
-                            exercise_check_list_ref.lock().unwrap().exercises.push(ExerciseResult {
-                                name: inner_exercise.name,
-                                result: false,
-                            });
-                            exercise_check_list_ref.lock().unwrap().statistics.total_failures += 1;
-                        }
-                    }
-                });
-                tasks.push(t);
-            }
-            for task in tasks {
-                task.await.unwrap();
-            }
-            let now_end = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs();
-            let total_time = now_end - now_start;
-            println!(
-                "===============================试卷批改完成,总耗时: {} s; ==================================",
-                total_time
-            );
-            let exercise_check_list_ref = Arc::clone(&exercise_check_list);
-            exercise_check_list_ref.lock().unwrap().statistics.total_time = total_time as u32;
-            let serialized = serde_json::to_string_pretty(&*exercise_check_list.lock().unwrap()).unwrap();
-            fs::create_dir_all(".github/result").unwrap();
-            fs::write(".github/result/check_result.json", serialized).unwrap();
-        }
-
-        Subcommands::Lsp(_subargs) => {
-            let mut project = project::RustAnalyzerProject::new();
-            project
-                .get_sysroot_src()
-                .expect("Couldn't find toolchain path, do you have `rustc` installed?");
-            project
-                .exercises_to_json()
-                .expect("Couldn't parse rustlings exercises files");
-
-            if project.crates.is_empty() {
-                println!("Failed find any exercises, make sure you're in the `rustlings` folder");
-            } else if project.write_to_disk().is_err() {
-                println!("Failed to write rust-project.json to disk for rust-analyzer");
-            } else {
-                println!("Successfully generated rust-project.json");
-                println!("rust-analyzer will now parse exercises, restart your language server or editor")
-            }
-        }
-
-        Subcommands::Watch(_subargs) => match watch(&exercises, verbose, _subargs.success_hints) {
-            Err(e) => {
-                println!(
-                    "Error: Could not watch your progress. Error message was {:?}.",
-                    e
-                );
-                println!("Most likely you've run out of disk space or your 'inotify limit' has been reached.");
-                std::process::exit(1);
-            }
-            Ok(WatchStatus::Finished) => {
-                println!(
-                    "{emoji} All exercises completed! {emoji}",
-                    emoji = Emoji("🎉", "★")
-                );
-                println!("\n{FENISH_LINE}\n");
-            }
-            Ok(WatchStatus::Unfinished) => {
-                println!("We hope you're enjoying learning about Rust!");
-                println!("If you want to continue working on the exercises at a later point, you can simply run `rustlings watch` again");
-            }
-        },
     }
 }
 
+// ======================== Run 模块（运行/重置练习） ========================
+pub mod run {
+    use super::*;
+
+    /// 运行单个练习
+    pub fn run(exercise: &exercise::Exercise, verbose: bool) -> Result<(), ()> {
+        match exercise.mode {
+            exercise::Mode::Compile => run_compile(exercise, verbose),
+            exercise::Mode::Test => run_test(exercise, verbose),
+            exercise::Mode::Clippy => run_clippy(exercise, verbose),
+            exercise::Mode::BuildScript => run_compile(exercise, verbose),
+        }
+    }
+
+    /// 重置单个练习（模拟 git stash）
+    pub fn reset(exercise: &exercise::Exercise) -> Result<(), ()> {
+        println_success!("正在重置练习: {}", exercise.name);
+        // 实际项目中需调用 git stash -- <file>
+        Command::new("git")
+            .arg("stash")
+            .arg("--")
+            .arg(&exercise.path)
+            .status()
+            .map_err(|e| {
+                println_error!("重置失败: {}", e);
+            })?;
+        Ok(())
+    }
+
+    /// 运行编译型练习
+    fn run_compile(exercise: &exercise::Exercise, verbose: bool) -> Result<(), ()> {
+        let output = Command::new("rustc")
+            .arg(&exercise.path)
+            .output()
+            .map_err(|e| {
+                println_error!("编译失败: {}", e);
+            })?;
+
+        if verbose || !output.status.success() {
+            println!("{}", String::from_utf8_lossy(&output.stdout));
+            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+        }
+
+        if output.status.success() {
+            println_success!("练习 {} 编译成功!", exercise.name);
+            Ok(())
+        } else {
+            println_error!("练习 {} 编译失败!", exercise.name);
+            Err(())
+        }
+    }
+
+    /// 运行测试型练习
+    fn run_test(exercise: &exercise::Exercise, verbose: bool) -> Result<(), ()> {
+        let output = Command::new("cargo")
+            .arg("test")
+            .arg("--manifest-path")
+            .arg(exercise.path.parent().unwrap().join("Cargo.toml"))
+            .arg("--")
+            .arg(exercise.path.file_stem().unwrap())
+            .output()
+            .map_err(|e| {
+                println_error!("测试失败: {}", e);
+            })?;
+
+        if verbose || !output.status.success() {
+            println!("{}", String::from_utf8_lossy(&output.stdout));
+            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+        }
+
+        if output.status.success() {
+            println_success!("练习 {} 测试成功!", exercise.name);
+            Ok(())
+        } else {
+            println_error!("练习 {} 测试失败!", exercise.name);
+            Err(())
+        }
+    }
+
+    /// 运行 Clippy 型练习
+    fn run_clippy(exercise: &exercise::Exercise, verbose: bool) -> Result<(), ()> {
+        let output = Command::new("cargo")
+            .arg("clippy")
+            .arg("--manifest-path")
+            .arg(exercise.path.parent().unwrap().join("Cargo.toml"))
+            .output()
+            .map_err(|e| {
+                println_error!("Clippy 检查失败: {}", e);
+            })?;
+
+        if verbose || !output.status.success() {
+            println!("{}", String::from_utf8_lossy(&output.stdout));
+            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+        }
+
+        if output.status.success() {
+            println_success!("练习 {} Clippy 检查通过!", exercise.name);
+            Ok(())
+        } else {
+            println_error!("练习 {} Clippy 检查失败!", exercise.name);
+            Err(())
+        }
+    }
+}
+
+// ======================== Verify 模块（验证练习） ========================
+pub mod verify {
+    use super::*;
+
+    /// 验证多个练习
+    pub fn verify<I>(
+        exercises: I,
+        _range: (usize, usize),
+        verbose: bool,
+        _success_hints: bool,
+    ) -> Result<(), &'static exercise::Exercise>
+    where
+        I: Iterator<Item = &'static exercise::Exercise>,
+    {
+        for exercise in exercises {
+            if run::run(exercise, verbose).is_err() {
+                return Err(exercise);
+            }
+        }
+        Ok(())
+    }
+}
+
+// ======================== 核心工具函数 ========================
+/// 查找指定名称的练习
+fn find_exercise<'a>(name: &str, exercises: &'a [exercise::Exercise]) -> &'a exercise::Exercise {
+    if name.eq("next") {
+        // 查找下一个未完成的练习
+        exercises
+            .iter()
+            .find(|e| !e.looks_done())
+            .unwrap_or_else(|| {
+                println_success!("🎉 恭喜！所有练习已完成！");
+                std::process::exit(0);
+            })
+    } else {
+        // 按名称查找练习
+        exercises
+            .iter()
+            .find(|e| e.name == name)
+            .unwrap_or_else(|| {
+                println_error!("未找到练习: {}", name);
+                std::process::exit(1);
+            })
+    }
+}
+
+/// 检查 rustc 是否安装
+fn rustc_exists() -> bool {
+    Command::new("rustc")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map_or(false, |s| s.success())
+}
+
+/// 启动 watch 模式的交互 shell
 fn spawn_watch_shell(
     failed_exercise_hint: &Arc<Mutex<Option<String>>>,
     should_quit: Arc<AtomicBool>,
 ) {
     let failed_exercise_hint = Arc::clone(failed_exercise_hint);
-    println!("Welcome to watch mode! You can type 'help' to get an overview of the commands you can use here.");
+    println!("📌 Watch 模式 - 输入 'help' 查看命令");
+
     thread::spawn(move || loop {
         let mut input = String::new();
         match io::stdin().read_line(&mut input) {
             Ok(_) => {
                 let input = input.trim();
-                if input == "hint" {
-                    if let Some(hint) = &*failed_exercise_hint.lock().unwrap() {
-                        println!("{hint}");
+                match input {
+                    "hint" => {
+                        if let Some(hint) = &*failed_exercise_hint.lock().unwrap() {
+                            println!("💡 提示: {}", hint);
+                        } else {
+                            println!("ℹ️  暂无失败练习的提示");
+                        }
                     }
-                } else if input == "clear" {
-                    println!("\x1B[2J\x1B[1;1H");
-                } else if input.eq("quit") {
-                    should_quit.store(true, Ordering::SeqCst);
-                    println!("Bye!");
-                } else if input.eq("help") {
-                    println!("Commands available to you in watch mode:");
-                    println!("  hint   - prints the current exercise's hint");
-                    println!("  clear  - clears the screen");
-                    println!("  quit   - quits watch mode");
-                    println!("  !<cmd> - executes a command, like `!rustc --explain E0381`");
-                    println!("  help   - displays this help message");
-                    println!();
-                    println!("Watch mode automatically re-evaluates the current exercise");
-                    println!("when you edit a file's contents.")
-                } else if let Some(cmd) = input.strip_prefix('!') {
-                    let parts: Vec<&str> = cmd.split_whitespace().collect();
-                    if parts.is_empty() {
-                        println!("no command provided");
-                    } else if let Err(e) = Command::new(parts[0]).args(&parts[1..]).status() {
-                        println!("failed to execute command `{}`: {}", cmd, e);
+                    "clear" => println!("\x1B[2J\x1B[1;1H"),
+                    "quit" => {
+                        should_quit.store(true, Ordering::SeqCst);
+                        println!("👋 再见！");
+                        break;
                     }
-                } else {
-                    println!("unknown command: {input}");
+                    "help" => {
+                        println!("📋 可用命令：");
+                        println!("  hint   - 显示当前失败练习的提示");
+                        println!("  clear  - 清屏");
+                        println!("  quit   - 退出 watch 模式");
+                        println!("  !<cmd> - 执行系统命令（如 !rustc --explain E0381）");
+                        println!("  help   - 显示此帮助");
+                    }
+                    cmd if cmd.starts_with('!') => {
+                        let parts: Vec<&str> = cmd[1..].split_whitespace().collect();
+                        if parts.is_empty() {
+                            println_error!("请输入命令（如 !rustc --version）");
+                        } else if let Err(e) = Command::new(parts[0])
+                            .args(&parts[1..])
+                            .status()
+                        {
+                            println_error!("命令执行失败: {}", e);
+                        }
+                    }
+                    "" => (),
+                    _ => println_error!("未知命令: {}", input),
                 }
             }
-            Err(error) => println!("error reading command: {error}"),
+            Err(e) => println_error!("读取输入失败: {}", e),
         }
     });
 }
 
-fn find_exercise<'a>(name: &str, exercises: &'a [exercise::Exercise]) -> &'a exercise::Exercise {
-    if name.eq("next") {
-        exercises
-            .iter()
-            .find(|e| !e.looks_done())
-            .unwrap_or_else(|| {
-                println!("🎉 Congratulations! You have done all the exercises!");
-                println!("🔚 There are no more exercises to do next!");
-                std::process::exit(1)
-            })
-    } else {
-        exercises
-            .iter()
-            .find(|e| e.name == name)
-            .unwrap_or_else(|| {
-                println!("No exercise found for '{name}'!");
-                std::process::exit(1)
-            })
-    }
-}
-
+// ======================== Watch 模式 ========================
 enum WatchStatus {
     Finished,
     Unfinished,
 }
 
+/// 启动 watch 模式（文件修改时自动验证）
 fn watch(
     exercises: &[exercise::Exercise],
     verbose: bool,
@@ -590,137 +518,359 @@ fn watch(
         println!("\x1Bc");
     }
 
+    // 创建通道监听文件变化
     let (tx, rx) = channel();
     let should_quit = Arc::new(AtomicBool::new(false));
 
+    // 初始化文件监视器
     let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_secs(1))?;
+    fs::create_dir_all("./exercises").ok(); // 确保目录存在
     watcher.watch(Path::new("./exercises"), RecursiveMode::Recursive)?;
 
     clear_screen();
+    println_success!("Watch 模式已启动 - 编辑 exercises 目录下的文件自动验证");
 
-    let to_owned_hint = |t: &exercise::Exercise| t.hint.to_owned();
-    let failed_exercise_hint = match verify(
-        &exercises.iter().collect::<Vec<_>>(),
-        (0, exercises.len()),
-        verbose,
-        success_hints,
-    ) {
-        Ok(_) => return Ok(WatchStatus::Finished),
-        Err(exercise) => Arc::new(Mutex::new(Some(to_owned_hint(exercise)))),
-    };
+    // 初始化失败练习提示
+    let failed_exercise_hint = Arc::new(Mutex::new(None));
     spawn_watch_shell(&failed_exercise_hint, Arc::clone(&should_quit));
+
+    // 转换为静态引用（测试场景，生产环境需优化生命周期）
+    let static_exercises: Vec<&'static exercise::Exercise> = exercises
+        .iter()
+        .map(|e| unsafe { &*(e as *const _) })
+        .collect();
+
+    // 主循环
     loop {
+        if should_quit.load(Ordering::SeqCst) {
+            return Ok(WatchStatus::Unfinished);
+        }
+
         match rx.recv_timeout(Duration::from_secs(1)) {
             Ok(event) => match event {
-                DebouncedEvent::Create(b) | DebouncedEvent::Chmod(b) | DebouncedEvent::Write(b) => {
-                    if b.extension() == Some(OsStr::new("rs")) && b.exists() {
-                        let filepath = b.as_path().canonicalize().unwrap();
-                        let pending_exercises = exercises
-                            .iter()
-                            .find(|e| filepath.ends_with(&e.path))
-                            .into_iter()
-                            .chain(
-                                exercises
-                                    .iter()
-                                    .filter(|e| !e.looks_done() && !filepath.ends_with(&e.path)),
-                            )
-                            .collect::<Vec<_>>();
-                        let num_done = exercises.iter().filter(|e| e.looks_done()).count();
+                DebouncedEvent::Write(path) | DebouncedEvent::Create(path) => {
+                    if path.extension() == Some(OsStr::new("rs")) {
                         clear_screen();
-                        match verify(
-                            &pending_exercises,
-                            (num_done, exercises.len()),
+                        println!("🔄 文件变更: {}", path.display());
+
+                        // 重新验证所有练习
+                        let result = verify::verify(
+                            static_exercises.iter().copied(),
+                            (0, exercises.len()),
                             verbose,
                             success_hints,
-                        ) {
-                            Ok(_) => return Ok(WatchStatus::Finished),
-                            Err(exercise) => {
-                                let mut failed_exercise_hint = failed_exercise_hint.lock().unwrap();
-                                *failed_exercise_hint = Some(to_owned_hint(exercise));
+                        );
+
+                        match result {
+                            Ok(_) => {
+                                if exercises.iter().all(|e| e.looks_done()) {
+                                    return Ok(WatchStatus::Finished);
+                                }
+                            }
+                            Err(ex) => {
+                                *failed_exercise_hint.lock().unwrap() = Some(ex.hint.clone());
+                                println_error!("练习 {} 验证失败 - 输入 'hint' 查看提示", ex.name);
                             }
                         }
                     }
                 }
+                DebouncedEvent::Remove(_) | DebouncedEvent::Rename(_, _) => {
+                    clear_screen();
+                    println!("🔄 文件变更，重新验证...");
+                    let result = verify::verify(
+                        static_exercises.iter().copied(),
+                        (0, exercises.len()),
+                        verbose,
+                        success_hints,
+                    );
+                    if let Err(ex) = result {
+                        *failed_exercise_hint.lock().unwrap() = Some(ex.hint.clone());
+                    }
+                }
                 _ => {}
             },
-            Err(RecvTimeoutError::Timeout) => {}
-            Err(e) => println!("watch error: {e:?}"),
+            Err(RecvTimeoutError::Timeout) => continue,
+            Err(RecvTimeoutError::Disconnected) => break,
         }
-        if should_quit.load(Ordering::SeqCst) {
-            return Ok(WatchStatus::Unfinished);
+    }
+
+    Ok(WatchStatus::Unfinished)
+}
+
+// ======================== 主函数 ========================
+#[tokio::main(flavor = "multi_thread")]
+async fn main() {
+    // 解析命令行参数
+    let args: Args = argh::from_env();
+
+    // 显示版本号
+    if args.version {
+        println!("rustlings v{}", VERSION);
+        std::process::exit(0);
+    }
+
+    // 欢迎信息
+    if args.nested.is_none() {
+        println!("\n{}", WELCOME);
+    }
+
+    // 检查运行目录（需存在 info.toml）
+    if !Path::new("info.toml").exists() {
+        println_error!("必须在 rustlings 根目录运行（缺少 info.toml）");
+        println!("💡 尝试: cd rustlings/");
+        std::process::exit(1);
+    }
+
+    // 检查 rustc 是否安装
+    if !rustc_exists() {
+        println_error!("未找到 rustc - 请先安装 Rust");
+        println!("💡 安装指南: https://www.rust-lang.org/tools/install");
+        std::process::exit(1);
+    }
+
+    // 加载练习列表
+    let toml_str = fs::read_to_string("info.toml").unwrap_or_else(|_| {
+        r#"
+        [exercises]
+        exercises = []
+        "#.to_string()
+    });
+    let exercise_list = toml::from_str::<exercise::ExerciseList>(&toml_str)
+        .expect("解析 info.toml 失败");
+    let exercises = exercise_list.exercises;
+    let verbose = args.nocapture;
+
+    // 处理子命令
+    let command = args.nested.unwrap_or_else(|| {
+        println!("{}", DEFAULT_OUT);
+        std::process::exit(0);
+    });
+
+    match command {
+        Subcommands::List(subargs) => {
+            // 列出所有练习
+            if !subargs.paths && !subargs.names {
+                println!("{:<20}\t{:<50}\t{:<8}", "名称", "路径", "状态");
+                println!("{}", "-".repeat(80));
+            }
+
+            let mut done_count = 0;
+            let filters = subargs.filter.clone().unwrap_or_default().to_lowercase();
+            let filter_parts: Vec<&str> = filters.split(',').map(|s| s.trim()).collect();
+
+            for ex in &exercises {
+                let path = ex.path.display().to_string();
+                let name = ex.name.clone();
+
+                // 过滤逻辑
+                let filter_match = filter_parts
+                    .iter()
+                    .filter(|f| !f.is_empty())
+                    .any(|f| name.contains(f) || path.contains(f))
+                    || filter_parts.is_empty();
+
+                // 完成状态过滤
+                let is_done = ex.looks_done();
+                let status_match = match (subargs.solved, subargs.unsolved) {
+                    (true, false) => is_done,
+                    (false, true) => !is_done,
+                    _ => true,
+                };
+
+                if filter_match && status_match {
+                    if is_done {
+                        done_count += 1;
+                    }
+
+                    // 输出格式
+                    let line = if subargs.paths {
+                        format!("{}", path)
+                    } else if subargs.names {
+                        format!("{}", name)
+                    } else {
+                        format!(
+                            "{:<20}\t{:<50}\t{}",
+                            name,
+                            path,
+                            if is_done { "✅ 已完成" } else { "⏳ 未完成" }
+                        )
+                    };
+                    println!("{}", line);
+                }
+            }
+
+            // 输出进度
+            let total = exercises.len();
+            let progress = (done_count as f32 / total as f32) * 100.0;
+            println!("\n📊 进度: {}/{} 练习已完成 ({:.1}%)", done_count, total, progress);
+        }
+
+        Subcommands::Run(subargs) => {
+            // 运行单个练习
+            let ex = find_exercise(&subargs.name, &exercises);
+            run::run(ex, verbose).unwrap_or_else(|_| std::process::exit(1));
+        }
+
+        Subcommands::Reset(subargs) => {
+            // 重置单个练习
+            let ex = find_exercise(&subargs.name, &exercises);
+            run::reset(ex).unwrap_or_else(|_| std::process::exit(1));
+        }
+
+        Subcommands::Hint(subargs) => {
+            // 显示练习提示
+            let ex = find_exercise(&subargs.name, &exercises);
+            println!("💡 {} 的提示: {}", ex.name, ex.hint);
+        }
+
+        Subcommands::Verify(_subargs) => {
+            // 验证所有练习
+            let static_exs: Vec<&'static exercise::Exercise> = exercises
+                .iter()
+                .map(|e| unsafe { &*(e as *const _) })
+                .collect();
+
+            verify::verify(
+                static_exs.iter().copied(),
+                (0, exercises.len()),
+                verbose,
+                false,
+            )
+            .unwrap_or_else(|ex| {
+                println_error!("验证失败 - 练习 {} 未通过", ex.name);
+                std::process::exit(1);
+            });
+
+            println_success!("所有练习验证通过！");
+        }
+
+        Subcommands::CicvVerify(_subargs) => {
+            // 批量验证并生成报告
+            let start_time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            let success_count = Arc::new(Mutex::new(0));
+            let total = exercises.len();
+
+            // 初始化报告
+            let report = Arc::new(Mutex::new(ExerciseCheckList {
+                exercises: vec![],
+                user_name: None,
+                statistics: ExerciseStatistics {
+                    total_exercises: total,
+                    total_succeeds: 0,
+                    total_failures: 0,
+                    total_time: 0,
+                },
+            }));
+
+            // 并发验证所有练习
+            let mut tasks = vec![];
+            for ex in exercises {
+                let success_clone = Arc::clone(&success_count);
+                let report_clone = Arc::clone(&report);
+                let verbose = verbose;
+
+                let task = task::spawn(async move {
+                    let ex_start = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs();
+
+                    let result = run::run(&ex, verbose).is_ok();
+                    if result {
+                        *success_clone.lock().unwrap() += 1;
+                        println_success!("{} ✅", ex.name);
+                    } else {
+                        println_error!("{} ❌", ex.name);
+                    }
+
+                    let ex_end = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs();
+                    println!("⏱️ {} 耗时: {}s", ex.name, ex_end - ex_start);
+
+                    // 更新报告
+                    let mut report = report_clone.lock().unwrap();
+                    report.exercises.push(ExerciseResult {
+                        name: ex.name,
+                        result,
+                    });
+
+                    if result {
+                        report.statistics.total_succeeds += 1;
+                    } else {
+                        report.statistics.total_failures += 1;
+                    }
+                });
+
+                tasks.push(task);
+            }
+
+            // 等待所有任务完成
+            for task in tasks {
+                task.await.unwrap();
+            }
+
+            // 生成最终报告
+            let end_time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            let total_time = (end_time - start_time) as u32;
+
+            let mut report = report.lock().unwrap();
+            report.statistics.total_time = total_time;
+
+            // 保存报告
+            fs::create_dir_all(".github/result").ok();
+            let report_json = serde_json::to_string_pretty(&*report).unwrap();
+            fs::write(".github/result/check_result.json", report_json).unwrap();
+
+            // 输出汇总
+            println!("\n{}", "=".repeat(80));
+            println_success!("批量验证完成！");
+            println!("📊 总计: {} 练习", total);
+            println!("✅ 成功: {}", report.statistics.total_succeeds);
+            println!("❌ 失败: {}", report.statistics.total_failures);
+            println!("⏱️ 总耗时: {}s", total_time);
+            println!("📄 报告已保存至: .github/result/check_result.json");
+            println!("{}", "=".repeat(80));
+        }
+
+        Subcommands::Lsp(_subargs) => {
+            // 生成 rust-analyzer 配置
+            let mut project = project::RustAnalyzerProject::new();
+            project.get_sysroot_src().expect("获取 sysroot 失败");
+            project.exercises_to_json().expect("解析练习失败");
+
+            if project.crates.is_empty() {
+                println_warning!("未找到练习 - 请确认在 rustlings 目录运行");
+            } else if project.write_to_disk().is_err() {
+                println_error!("生成 rust-project.json 失败");
+            } else {
+                println_success!("成功生成 rust-project.json");
+                println!("💡 重启 rust-analyzer 以加载练习配置");
+            }
+        }
+
+        Subcommands::Watch(subargs) => {
+            // 启动 watch 模式
+            match watch(&exercises, verbose, subargs.success_hints) {
+                Ok(WatchStatus::Finished) => {
+                    println_success!("{}", FINISH_LINE);
+                }
+                Ok(WatchStatus::Unfinished) => {
+                    println!("👋 Watch 模式已退出");
+                }
+                Err(e) => {
+                    println_error!("Watch 模式失败: {:?}", e);
+                    println!("💡 可能原因：磁盘空间不足 / inotify 限制达到");
+                    std::process::exit(1);
+                }
+            }
         }
     }
 }
-
-fn rustc_exists() -> bool {
-    Command::new("rustc")
-        .args(&["--version"])
-        .stdout(Stdio::null())
-        .spawn()
-        .and_then(|mut child| child.wait())
-        .map(|status| status.success())
-        .unwrap_or(false)
-}
-
-const DEFAULT_OUT: &str = r#"Thanks for installing Rustlings!
-
-Is this your first time? Don't worry, Rustlings was made for beginners! We are
-going to teach you a lot of things about Rust, but before we can get
-started, here's a couple of notes about how Rustlings operates:
-
-1. The central concept behind Rustlings is that you solve exercises. These
-   exercises usually have some sort of syntax error in them, which will cause
-   them to fail compilation or testing. Sometimes there's a logic error instead
-   of a syntax error. No matter what error, it's your job to find it and fix it!
-   You'll know when you fixed it because then, the exercise will compile and
-   Rustlings will be able to move on to the next exercise.
-2. If you run Rustlings in watch mode (which we recommend), it'll automatically
-   start with the first exercise. Don't get confused by an error message popping
-   up as soon as you run Rustlings! This is part of the exercise that you're
-   supposed to solve, so open the exercise file in an editor and start your
-   detective work!
-3. If you're stuck on an exercise, there is a helpful hint you can view by typing
-   'hint' (in watch mode), or running `rustlings hint exercise_name`.
-4. If an exercise doesn't make sense to you, feel free to open an issue on GitHub!
-   (https://github.com/rust-lang/rustlings/issues/new). We look at every issue,
-   and sometimes, other learners do too so you can help each other out!
-5. If you want to use `rust-analyzer` with exercises, which provides features like
-   autocompletion, run the command `rustlings lsp`.
-
-Got all that? Great! To get started, run `rustlings watch` in order to get the first
-exercise. Make sure to have your editor open!"#;
-
-const FENISH_LINE: &str = r#"+----------------------------------------------------+
-|          You made it to the Fe-nish line!          |
-+--------------------------  ------------------------+
-                          \\/
-     ▒▒          ▒▒▒▒▒▒▒▒      ▒▒▒▒▒▒▒▒          ▒▒
-   ▒▒▒▒  ▒▒    ▒▒        ▒▒  ▒▒        ▒▒    ▒▒  ▒▒▒▒
-   ▒▒▒▒  ▒▒  ▒▒            ▒▒            ▒▒  ▒▒  ▒▒▒▒
- ░░▒▒▒▒░░▒▒  ▒▒            ▒▒            ▒▒  ▒▒░░▒▒▒▒
-   ▓▓▓▓▓▓▓▓  ▓▓      ▓▓██  ▓▓  ▓▓██      ▓▓  ▓▓▓▓▓▓▓▓
-     ▒▒▒▒    ▒▒      ████  ▒▒  ████      ▒▒░░  ▒▒▒▒
-       ▒▒  ▒▒▒▒▒▒        ▒▒▒▒▒▒        ▒▒▒▒▒▒  ▒▒
-         ▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▒▒▒▒▒▒▒▒▓▓▒▒▓▓▒▒▒▒▒▒▒▒
-           ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-             ▒▒▒▒▒▒▒▒▒▒██▒▒▒▒▒▒██▒▒▒▒▒▒▒▒▒▒
-           ▒▒  ▒▒▒▒▒▒▒▒▒▒██████▒▒▒▒▒▒▒▒▒▒  ▒▒
-         ▒▒    ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒    ▒▒
-       ▒▒    ▒▒    ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒    ▒▒    ▒▒
-       ▒▒  ▒▒    ▒▒                  ▒▒    ▒▒  ▒▒
-           ▒▒  ▒▒                      ▒▒  ▒▒
-
-We hope you enjoyed learning about the various aspects of Rust!
-If you noticed any issues, please don't hesitate to report them to our repo.
-You can also contribute your own exercises to help the greater community!
-
-Before reporting an issue or contributing, please read our guidelines:
-https://github.com/rust-lang/rustlings/blob/main/CONTRIBUTING.md"#;
-
-const WELCOME: &str = r#"       welcome to...
-                 _   _ _
-  _ __ _   _ ___| |_| (_)_ __   __ _ ___
- | '__| | | / __| __| | | '_ \ / _` / __|
- | |  | |_| \__ \ |_| | | | | | (_| \__ \
- |_|   \__,_|___/\__|_|_|_| |_|\__, |___/
-                               |___/"#;
