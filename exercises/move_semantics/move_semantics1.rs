@@ -1,11 +1,7 @@
-// move_semantics1.rs
-// Execute `rustlings hint move_semantics1` or use the `hint` watch subcommand
-// for a hint.
-
 fn main() {
     let vec0 = Vec::new();
 
-    // 修复：通过引用传递，避免所有权转移
+    // 通过引用传递 vec0，避免所有权转移
     let mut vec1 = fill_vec(&vec0);
 
     println!("{} has length {} content `{:?}`", "vec1", vec1.len(), vec1);
@@ -15,13 +11,14 @@ fn main() {
     println!("{} has length {} content `{:?}`", "vec1", vec1.len(), vec1);
 }
 
-// 修复：接收引用并返回新的 Vec，不获取原 Vec 的所有权
+// 接收原 Vec 的不可变引用，返回新的 Vec（不获取原 Vec 所有权）
 fn fill_vec(vec: &Vec<i32>) -> Vec<i32> {
-    // 创建一个新的 Vec，复制原 Vec 的内容（如果有的话）
-    let mut vec = vec.clone();
-    vec.push(22);
-    vec.push(44);
-    vec.push(66);
-
-    vec
+    // 克隆原 Vec 的内容，创建新的可变 Vec
+    let mut new_vec = vec.clone();
+    // 向新 Vec 中添加元素
+    new_vec.push(22);
+    new_vec.push(44);
+    new_vec.push(66);
+    // 返回新 Vec
+    new_vec
 }
