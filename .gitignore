@@ -1,17 +1,38 @@
+# ========================== 编辑器/IDE 相关忽略项 ==========================
+# Vim 编辑器临时交换文件
 *.swp
+# JetBrains 系列IDE（CLion/IDEA/RustRover等）配置目录
+.idea/
+# JetBrains IDE 模块文件
+*.iml
+# VS Code 本地配置（大部分个性化配置忽略）
+.vscode/*
+# VS Code 例外：扩展推荐文件（需共享给团队，不忽略）
+!/.vscode/extensions.json
+# VS Code 例外：设置文件（若团队需统一配置，可取消注释）
+# !/.vscode/settings.json
+
+# ========================== Rust 项目专属忽略项 ==========================
+# Rust 编译产物目录（cargo build/cargo run 生成，体积大且无需版本控制）
 target/
+# 所有目录下的Rust代码备份文件（后缀.rs.bk）
 **/*.rs.bk
-.DS_Store
-*.pdb
+# Rust IDE 项目配置文件
+rust-project.json
+# 特定子项目（exercises/clippy）的依赖配置文件
 exercises/clippy/Cargo.toml
 exercises/clippy/Cargo.lock
-rust-project.json
-.idea
-.vscode/*
-!.vscode/extensions.json
-*.iml
-*.o
-public/
 
-# Local Netlify folder
+# ========================== 跨平台系统文件 ==========================
+# macOS 系统自动生成的文件夹属性文件
+.DS_Store
+# Windows 平台调试符号文件
+*.pdb
+# 编译生成的目标文件（通用）
+*.o
+
+# ========================== 项目/部署相关忽略项 ==========================
+# 前端构建后静态资源目录
+public/
+# Netlify 部署工具本地配置目录
 .netlify
