@@ -1,7 +1,23 @@
-root = true
+// Rust 程序入口函数，必须存在
+fn main() {
+    // 定义不可变变量（自动推导类型）
+    let greeting: &str = "Hello, Rust!";
+    let version = "1.79.0";
+    let is_rust_good = true;
+    let pi = 3.1415926;
 
-[*.rs]
-end_of_line = lf
-insert_final_newline = true
-indent_style = space
-indent_size = 4
+    // 打印信息到控制台
+    println!("{}", greeting);
+    println!("当前推荐 Rust 版本：{}", version);
+    println!("Rust 是否优秀：{}", if is_rust_good { "是" } else { "否" });
+    println!("圆周率近似值：{:.4}", pi);
+
+    // 调用自定义函数
+    calculate_sum(10, 25);
+}
+
+// 自定义函数：计算两数之和并打印
+fn calculate_sum(a: i32, b: i32) {
+    let sum = a + b;
+    println!("{} + {} = {}", a, b, sum);
+}
