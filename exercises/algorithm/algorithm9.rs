@@ -1,12 +1,6 @@
-/*
-	heap
-	This question requires you to implement a binary heap function
-*/
-// I AM NOT DONE
 
 use std::cmp::Ord;
 use std::default::Default;
-
 pub struct Heap<T>
 where
     T: Default,
@@ -64,8 +58,6 @@ where
     fn smallest_child_idx(&self, idx: usize) -> usize {
          let left = self.left_child_idx(idx);
         let right = self.right_child_idx(idx);
-
-        // 若右孩子存在且更符合比较器规则，则返回右孩子索引
         if right <= self.count && (self.comparator)(&self.items[right], &self.items[left]) {
             right
         } else {
