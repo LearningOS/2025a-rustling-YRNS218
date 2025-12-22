@@ -14,7 +14,6 @@ pub fn animal_habitat(animal: &str) -> &'static str {
         0
     };
 
-    // DO NOT CHANGE THIS STATEMENT BELOW
     let habitat = if identifier == 1 {
         "Beach"
     } else if identifier == 2 {
