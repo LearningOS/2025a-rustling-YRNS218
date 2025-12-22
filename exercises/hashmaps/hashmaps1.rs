@@ -1,8 +1,3 @@
-// This powerful wrapper provides the ability to store a positive integer value.
-// Rewrite it using generics so that it supports wrapping ANY type.
-// Execute `rustlings hint generics2` or use the `hint` watch subcommand for a hint.
-
-// I AM NOT DONE
 
 // 结构体泛型化：使用类型参数 T 替代具体类型 u32
 struct Wrapper<T> {
