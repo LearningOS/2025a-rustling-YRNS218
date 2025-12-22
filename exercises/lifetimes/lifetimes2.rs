@@ -9,7 +9,7 @@ fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
 
 fn main() {
     let string1 = String::from("long string is long");
-    // 将 string2 移到和 result 同作用域（避免内部块销毁 string2）
+    // 将 string2 移到和 result 同作用域（避免内部销毁 string2）
     let string2 = String::from("xyz");
     let result = longest(string1.as_str(), string2.as_str());
     println!("The longest string is '{}'", result);
