@@ -1,7 +1,12 @@
-root = true
-
-[*.rs]
-end_of_line = lf
-insert_final_newline = true
-indent_style = space
-indent_size = 4
+// .prettierrc.js - Prettier 代码格式化配置文件
+module.exports = {
+  // 根目录配置，避免向上查找其他 Prettier 配置
+  root: true,
+  // 针对所有 .rs 后缀（Rust 文件）的专属格式化规则
+  "[*.rs]": {
+    end_of_line: "lf", // 行尾换行符使用 LF（Unix/Linux 规范，避免跨平台格式冲突）
+    insert_final_newline: true, // 文件末尾自动插入一个空行（符合大多数项目规范）
+    indent_style: "space", // 缩进使用空格（而非 Tab 键）
+    indent_size: 4 // 缩进空格数为 4 个（Rust 项目推荐缩进规范）
+  }
+};
