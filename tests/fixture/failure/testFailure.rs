@@ -1,4 +1,5 @@
+
 #[test]
 fn passing() {
-    asset!(true);
+    assert!(true);
 }
