@@ -1,5 +1,4 @@
-// fake_exercise
 
 fn main() {
-
+    println!("Finished exercise!");
 }
