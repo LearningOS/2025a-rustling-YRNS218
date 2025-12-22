@@ -1,7 +1,5 @@
-// fake_exercise
-
-// I AM NOT DONE
 
 fn main() {
-
+    // 补充示例逻辑：打印提示信息
+    println!("这是一个待完成的练习文件");
 }
