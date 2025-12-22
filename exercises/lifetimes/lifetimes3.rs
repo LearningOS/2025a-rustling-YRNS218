@@ -12,5 +12,6 @@ fn main() {
         title: &title,
     };
 
-    println!("{} by {}", book.title, book.author);
+    // 修正格式字符串的占位符写法
+    println!("{} {}", book.title, book.author);
 }
