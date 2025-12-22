@@ -13,30 +13,25 @@ enum IntoColorError {
     IntConversion,
 }
 
-// Tuple 实现 (i16, i16, i16) -> Color
 impl TryFrom<(i16, i16, i16)> for Color {
     type Error = IntoColorError;
 
     fn try_from(tuple: (i16, i16, i16)) -> Result<Self, Self::Error> {
-        // 转换每个分量为 u8（需在 0~255 范围内）
+      
         let red = u8::try_from(tuple.0).map_err(|_| IntoColorError::IntConversion)?;
         let green = u8::try_from(tuple.1).map_err(|_| IntoColorError::IntConversion)?;
         let blue = u8::try_from(tuple.2).map_err(|_| IntoColorError::IntConversion)?;
         Ok(Color { red, green, blue })
     }
 }
-
-// Array 实现 [i16; 3] -> Color
 impl TryFrom<[i16; 3]> for Color {
     type Error = IntoColorError;
 
     fn try_from(arr: [i16; 3]) -> Result<Self, Self::Error> {
-        // 利用元组的 TryFrom 实现（复用逻辑）
         Self::try_from((arr[0], arr[1], arr[2]))
     }
 }
 
-// Slice 实现 &[i16] -> Color
 impl TryFrom<&[i16]> for Color {
     type Error = IntoColorError;
 
