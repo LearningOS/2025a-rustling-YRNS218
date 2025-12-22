@@ -1,18 +1,8 @@
-// generics2.rs
-//
-// This powerful wrapper provides the ability to store a positive integer value.
-// Rewrite it using generics so that it supports wrapping ANY type.
-//
-// Execute `rustlings hint generics2` or use the `hint` watch subcommand for a
-// hint.
-
-// I AM NOT DONE
 
 struct Wrapper<T> {
     value: T,
 }
 
-// 实现泛型化：为所有 T 类型实现 Wrapper<T> 的方法
 impl<T> Wrapper<T> {
     pub fn new(value: T) -> Self {
         Wrapper { value }
