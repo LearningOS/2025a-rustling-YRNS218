@@ -1,9 +1,4 @@
-/*
-	dfs
-	This problem requires you to implement a basic DFS traversal
-*/
 
-// I AM NOT DONE
 use std::collections::HashSet;
 
 struct Graph {
@@ -28,8 +23,6 @@ impl Graph {
         self.dfs_helper(start, &mut visited, &mut visit_order);
         visit_order
     }
-
-    // Perform a depth-first search on the graph, return the order of visited nodes
     fn dfs(&self, start: usize) -> Vec<usize> {
         let mut visited = HashSet::new();
         let mut visit_order = Vec::new(); 
