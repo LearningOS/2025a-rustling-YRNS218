@@ -3,7 +3,6 @@ use glob::glob;
 use predicates::boolean::PredicateBooleanExt;
 use std::fs::File;
 use std::io::Read;
-use std::process::Command;
 
 #[test]
 fn runs_without_arguments() {
