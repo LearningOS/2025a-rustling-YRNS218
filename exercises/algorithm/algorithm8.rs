@@ -1,8 +1,3 @@
-/*
-	queue
-	This question requires you to use queues to implement the functionality of the stac
-*/
-// I AM NOT DONE
 
 #[derive(Debug)]
 pub struct Queue<T> {
@@ -60,7 +55,6 @@ q1: Queue<T>,
 impl<T> myStack<T> {
     pub fn new() -> Self {
         Self {
-			//TODO
 			q1:Queue::<T>::new(),
 			q2:Queue::<T>::new()
         }
