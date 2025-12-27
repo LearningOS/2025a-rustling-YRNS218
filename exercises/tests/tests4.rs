@@ -1,6 +1,3 @@
-// tests4.rs
-// Make sure that we're testing for the correct conditions!
-// Execute `rustlings hint tests4` or use the `hint` watch subcommand for a hint.
 
 struct Rectangle {
     width: i32,
