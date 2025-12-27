@@ -41,6 +41,7 @@ impl State {
         Message::Quit => self.quit = true,
     }
 }
+}
 
 #[cfg(test)]
 mod tests {
