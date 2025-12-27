@@ -1,17 +1,35 @@
+# Vim交换文件
 *.swp
+
+# Rust编译目标目录
 target/
+
+# Rust构建生成的临时文件
 **/*.rs.bk
+
+# 系统自动生成的文件
 .DS_Store
 *.pdb
+
+# Rust Clippy工具的配置文件
 exercises/clippy/Cargo.toml
 exercises/clippy/Cargo.lock
+
+# IDE相关文件
 rust-project.json
-.idea
+.idea/
+
+# VS Code配置（除了扩展列表）
 .vscode/*
 !.vscode/extensions.json
-*.iml
+
+# 编译生成的中间文件
+*.i64
 *.o
+
+# 静态资源目录
 public/
 
-# Local Netlify folder
+# Netlify本地部署目录
+# local Netlify folder
 .netlify
