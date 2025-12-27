@@ -1,12 +1,6 @@
-// traits3.rs
-// Your task is to implement the Licensed trait for both structures and have
-// them return the same information without writing the same function twice.
-// Consider what you can add to the Licensed trait.
-// Execute `rustlings hint traits3` or use the `hint` watch subcommand for a
-// hint.
 
 pub trait Licensed {
-    // 提供默认实现，返回相同的许可信息
+  
     fn licensing_info(&self) -> String {
         String::from("Some information")
     }
@@ -19,8 +13,6 @@ struct SomeSoftware {
 struct OtherSoftware {
     version_number: String,
 }
-
-// 无需为每个结构体单独实现方法，直接使用 trait 的默认实现
 impl Licensed for SomeSoftware {} // Don't edit this line
 impl Licensed for OtherSoftware {} // Don't edit this line
 
