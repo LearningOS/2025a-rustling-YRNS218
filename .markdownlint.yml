@@ -1,2 +1,2 @@
-# MD013/line-length Line length, Expected: 80
+# 禁用 MD013 规则（单行长度限制，默认要求行长度不超过80字符）
 MD013: false
