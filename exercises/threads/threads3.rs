@@ -1,5 +1,4 @@
-// threads3.rs
-// Execute `rustlings hint threads3` or use the `hint` watch subcommand for a hint.
+
 
 use std::sync::mpsc;
 use std::sync::Arc;
