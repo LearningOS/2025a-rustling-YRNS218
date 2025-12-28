@@ -1,4 +1,3 @@
-E
 
 use std::num::ParseIntError;
 #[derive(PartialEq, Debug)]

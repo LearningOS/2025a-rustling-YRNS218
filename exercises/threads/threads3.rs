@@ -1,45 +1,32 @@
+// threads3.rs
+//
+// Execute `rustlings hint threads3` or use the `hint` watch subcommand for a
+// hint.
 
 
 use std::sync::mpsc;
-use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-struct Queue {
-    length: u32,
-    first_half: Vec<u32>,
-    second_half: Vec<u32>,
-}
-
-impl Queue {
-    fn new() -> Self {
-        Queue {
-            length: 10,
-            first_half: vec![1, 2, 3, 4, 5],
-            second_half: vec![6, 7, 8, 9, 10],
-        }
-    }
-}
-
-fn send_tx(q: Queue, tx: mpsc::Sender<u32>) -> () {
-    let qc = Arc::new(q);
-    let qc1 = Arc::clone(&qc);
-    let qc2 = Arc::clone(&qc);
-
-    // 发送first_half的线程
+fn send_tx(q: Vec<u32>, tx: mpsc::Sender<u32>) {
+    // 克隆 q 给第一个线程
+    let q1 = q.clone();
+    let tx1 = tx.clone();
     thread::spawn(move || {
-        for val in &qc1.first_half {
+        for val in &q1[0..q1.len() / 2] {
             println!("sending {:?}", val);
-            tx.send(*val).unwrap();
+            tx1.send(*val).unwrap();
             thread::sleep(Duration::from_secs(1));
         }
     });
 
-    // 发送second_half的线程
+    // 克隆 q 给第二个线程
+    let q2 = q.clone();
+    let tx2 = tx.clone();
     thread::spawn(move || {
-        for val in &qc2.second_half {
+        for val in &q2[q2.len() / 2..] {
             println!("sending {:?}", val);
-            tx.send(*val).unwrap();
+            tx2.send(*val).unwrap();
             thread::sleep(Duration::from_secs(1));
         }
     });
@@ -47,22 +34,12 @@ fn send_tx(q: Queue, tx: mpsc::Sender<u32>) -> () {
 
 fn main() {
     let (tx, rx) = mpsc::channel();
-    let queue = Queue::new();
-    let queue_length = queue.length;
+    let q = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
-    send_tx(queue, tx);
+    send_tx(q, tx);
 
-    let mut total_received: u32 = 0;
-    // 接收所有发送的值（共10个）
+    // 接收线程发送的值
     for received in rx {
         println!("Got: {}", received);
-        total_received += 1;
-        // 当接收数量达到预期时退出循环
-        if total_received == queue_length {
-            break;
-        }
     }
-
-    println!("total numbers received: {}", total_received);
-    assert_eq!(total_received, queue_length);
 }

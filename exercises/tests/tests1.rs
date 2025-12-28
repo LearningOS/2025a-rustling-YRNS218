@@ -7,10 +7,7 @@
 // Execute `rustlings hint tests1` or use the `hint` watch subcommand for a
 // hint.
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn you_can_assert() {
-        assert!(false); // 让断言失败（满足"Make the test fail"要求）
-    }
+#[test]
+fn you_can_assert() {
+    assert!(true);
 }

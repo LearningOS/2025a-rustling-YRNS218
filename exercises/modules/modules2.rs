@@ -1,14 +1,14 @@
 // modules2.rs
-// You can bring module paths into scopes and provide new names for them with
-// the 'use' and 'as' keywords. Fix these 'use' statements to make the code
-// compile.
+// The delicious_snacks module is trying to present an external interface that is
+// different than its internal structure (the `fruits` and `veggies` modules and
+// associated constants). Complete the `use` statements to fit the uses in main and
+// find the one keyword missing for both constants.
 // Execute `rustlings hint modules2` or use the `hint` watch subcommand for a hint.
 
 mod delicious_snacks {
-    // 引入 fruits 模块中的 PEAR 并别名为 fruit
-    use self::fruits::PEAR as fruit;
-    // 引入 veggies 模块中的 CUCUMBER 并别名为 veggie
-    use self::veggies::CUCUMBER as veggie;
+    // TODO: 完成 use 语句
+    pub use self::fruits::PEAR as fruit;
+    pub use self::veggies::CUCUMBER as veggie;
 
     mod fruits {
         pub const PEAR: &'static str = "Pear";
@@ -19,10 +19,6 @@ mod delicious_snacks {
         pub const CUCUMBER: &'static str = "Cucumber";
         pub const CARROT: &'static str = "Carrot";
     }
-
-    // 暴露别名供外部使用（通过 pub use 重导出）
-    pub use self::fruit;
-    pub use self::veggie;
 }
 
 fn main() {

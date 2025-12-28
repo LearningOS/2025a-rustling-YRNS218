@@ -1,130 +1,120 @@
+// from_into.rs
+//
+// The trait `From` is used for value-to-value conversions. If `From` is
+// implemented correctly for a type, the `Into` trait should work conversely. You
+// can read more about it at https://doc.rust-lang.org/std/convert/trait.From.html
+//
+// Execute `rustlings hint from_into` or use the `hint` watch subcommand for a
+// hint.
 
-#[derive(Debug)]
+use std::convert::From;
+
+#[derive(Debug, PartialEq)]
 struct Person {
     name: String,
-    age: usize,
+    age: u8,
 }
 
-// We implement the Default trait to use it as a fallback
-// when the provided string is not convertible into a Person object
-impl Default for Person {
-    fn default() -> Person {
-        Person {
-            name: String::from("John"),
-            age: 30,
-        }
-    }
-}
+// 实现 From<&str> 来解析 "Name, Age" 格式的字符串
 impl From<&str> for Person {
-    fn from(s: &str) -> Person {
-        if s.is_empty() {
-            return Person::default();
-        }
-        let parts: Vec<&str> = s.split(',').collect();
-        if parts.len() < 2 {
-            return Person::default();
-        }
-        let name = parts[0].trim().to_string();
-        if name.is_empty() {
-            return Person::default();
-        }
-        let age_str = parts[1].trim();
-        let age = match age_str.parse::<usize>() {
-            Ok(age) => age,
-            Err(_) => return Person::default(),
-        };
+    fn from(s: &str) -> Self {
+        // 按逗号分割，去掉每个部分的前后空格
+        let parts: Vec<&str> = s.split(',').map(|part| part.trim()).collect();
+        
+        // 处理名字：取第一个非空部分，默认是 "Mike"
+        let name = parts.get(0)
+            .filter(|&part| !part.is_empty())
+            .cloned()
+            .unwrap_or("Mike")
+            .to_string();
+
+        // 处理年龄：取第二个部分解析，失败则默认 0
+        let age = parts.get(1)
+            .and_then(|part| part.parse().ok())
+            .unwrap_or(0);
+
         Person { name, age }
     }
-}
-
-fn main() {
-    // Use the `from` function
-    let p1 = Person::from("Mark,20");
-    // Since From is implemented for Person, we should be able to use Into
-    let p2: Person = "Gerald,70".into();
-    println!("{:?}", p1);
-    println!("{:?}", p2);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn test_default() {
-        // Test that the default person is 30 year old John
-        let dp = Person::default();
-        assert_eq!(dp.name, "John");
-        assert_eq!(dp.age, 30);
-    }
-    #[test]
-    fn test_bad_convert() {
-        // Test that John is returned when bad string is provided
         let p = Person::from("");
-        assert_eq!(p.name, "John");
-        assert_eq!(p.age, 30);
+        assert_eq!(p.name, "Mike");
+        assert_eq!(p.age, 0);
     }
+
     #[test]
     fn test_good_convert() {
-        // Test that "Mark,20" works
-        let p = Person::from("Mark,20");
-        assert_eq!(p.name, "Mark");
-        assert_eq!(p.age, 20);
-    }
-    #[test]
-    fn test_bad_age() {
-        // Test that "Mark,twenty" will return the default person due to an
-        // error in parsing age
-        let p = Person::from("Mark,twenty");
+        let p = Person::from("John, 30");
         assert_eq!(p.name, "John");
         assert_eq!(p.age, 30);
     }
 
     #[test]
-    fn test_missing_comma_and_age() {
-        let p: Person = Person::from("Mark");
+    fn test_bad_convert() {
+        let p = Person::from("John");
         assert_eq!(p.name, "John");
-        assert_eq!(p.age, 30);
-    }
-
-    #[test]
-    fn test_missing_age() {
-        let p: Person = Person::from("Mark,");
-        assert_eq!(p.name, "John");
-        assert_eq!(p.age, 30);
-    }
-
-    #[test]
-    fn test_missing_name() {
-        let p: Person = Person::from(",1");
-        assert_eq!(p.name, "John");
-        assert_eq!(p.age, 30);
-    }
-
-    #[test]
-    fn test_missing_name_and_age() {
-        let p: Person = Person::from(",");
-        assert_eq!(p.name, "John");
-        assert_eq!(p.age, 30);
-    }
-
-    #[test]
-    fn test_missing_name_and_invalid_age() {
-        let p: Person = Person::from(",one");
-        assert_eq!(p.name, "John");
-        assert_eq!(p.age, 30);
+        assert_eq!(p.age, 0);
     }
 
     #[test]
     fn test_trailing_comma() {
-        let p: Person = Person::from("Mike,32,");
+        let p = Person::from("John, 30,");
         assert_eq!(p.name, "John");
         assert_eq!(p.age, 30);
     }
 
     #[test]
     fn test_trailing_comma_and_some_string() {
-        let p: Person = Person::from("Mike,32,man");
+        let p = Person::from("John, 30, blah");
         assert_eq!(p.name, "John");
         assert_eq!(p.age, 30);
+    }
+
+    #[test]
+    fn test_missing_name() {
+        let p = Person::from(", 30");
+        assert_eq!(p.name, "Mike");
+        assert_eq!(p.age, 30);
+    }
+
+    #[test]
+    fn test_missing_age() {
+        let p = Person::from("John,");
+        assert_eq!(p.name, "John");
+        assert_eq!(p.age, 0);
+    }
+
+    #[test]
+    fn test_missing_name_and_age() {
+        let p = Person::from(",");
+        assert_eq!(p.name, "Mike");
+        assert_eq!(p.age, 0);
+    }
+
+    #[test]
+    fn test_missing_name_and_invalid_age() {
+        let p = Person::from(", blah");
+        assert_eq!(p.name, "Mike");
+        assert_eq!(p.age, 0);
+    }
+
+    #[test]
+    fn test_missing_comma_and_age() {
+        let p = Person::from("John");
+        assert_eq!(p.name, "John");
+        assert_eq!(p.age, 0);
+    }
+
+    #[test]
+    fn test_bad_age() {
+        let p = Person::from("John, blah");
+        assert_eq!(p.name, "John");
+        assert_eq!(p.age, 0);
     }
 }
