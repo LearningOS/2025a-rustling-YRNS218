@@ -1,0 +1,8 @@
+[package]
+name = "tests8"
+version = "0.0.1"
+edition = "2021"
+
+[[bin]]
+name = "tests8"
+path = "tests8.rs"

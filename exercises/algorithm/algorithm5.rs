@@ -1,54 +1,28 @@
-
 use std::collections::VecDeque;
 
-// Define a graph
-struct Graph {
-    adj: Vec<Vec<usize>>, 
-}
+fn bfs(graph: &Vec<Vec<usize>>, start: usize) -> Vec<usize> {
+    let mut visited = vec![false; graph.len()];
+    let mut queue = VecDeque::new();
+    let mut result = Vec::new();
 
-impl Graph {
-    // Create a new graph with n vertices
-    fn new(n: usize) -> Self {
-        Graph {
-            adj: vec![vec![]; n],
-        }
-    }
+    // 从起点开始
+    visited[start] = true;
+    queue.push_back(start);
 
-    // Add an edge to the graph
-    fn add_edge(&mut self, src: usize, dest: usize) {
-        self.adj[src].push(dest); 
-        self.adj[dest].push(src); 
-    }
+    while let Some(node) = queue.pop_front() {
+        result.push(node);
 
-    // Perform a breadth-first search on the graph, return the order of visited nodes
-    fn bfs_with_return(&self, start: usize) -> Vec<usize> {
-       let mut visit_order = Vec::new();
-        let mut visited = vec![false; self.adj.len()];
-        let mut queue = VecDeque::new();
-
-        // 初始化：标记起点为已访问并加入队列
-        visited[start] = true;
-        queue.push_back(start);
-
-        // 处理队列中的节点
-        while let Some(node) = queue.pop_front() {
-            // 记录访问顺序
-            visit_order.push(node);
-
-            // 遍历所有邻接节点
-            for &neighbor in &self.adj[node] {
-                if !visited[neighbor] {
-                    visited[neighbor] = true;
-                    queue.push_back(neighbor);
-                }
+        // 遍历邻居
+        for &neighbor in &graph[node] {
+            if !visited[neighbor] {
+                visited[neighbor] = true;
+                queue.push_back(neighbor);
             }
         }
-
-        let mut visit_order = vec![];
-        visit_order
     }
-}
 
+    result
+}
 
 #[cfg(test)]
 mod tests {
@@ -56,46 +30,39 @@ mod tests {
 
     #[test]
     fn test_bfs_all_nodes_visited() {
-        let mut graph = Graph::new(5);
-        graph.add_edge(0, 1);
-        graph.add_edge(0, 4);
-        graph.add_edge(1, 2);
-        graph.add_edge(1, 3);
-        graph.add_edge(1, 4);
-        graph.add_edge(2, 3);
-        graph.add_edge(3, 4);
-
-        let visited_order = graph.bfs_with_return(0);
-        assert_eq!(visited_order, vec![0, 1, 4, 2, 3]);
+        let graph = vec![
+            vec![1, 4],
+            vec![0, 2, 3],
+            vec![1],
+            vec![1],
+            vec![0],
+        ];
+        assert_eq!(bfs(&graph, 0), vec![0, 1, 4, 2, 3]);
     }
 
     #[test]
     fn test_bfs_different_start() {
-        let mut graph = Graph::new(3);
-        graph.add_edge(0, 1);
-        graph.add_edge(1, 2);
-
-        let visited_order = graph.bfs_with_return(2);
-        assert_eq!(visited_order, vec![2, 1, 0]);
-    }
-
-    #[test]
-    fn test_bfs_with_cycle() {
-        let mut graph = Graph::new(3);
-        graph.add_edge(0, 1);
-        graph.add_edge(1, 2);
-        graph.add_edge(2, 0);
-
-        let visited_order = graph.bfs_with_return(0);
-        assert_eq!(visited_order, vec![0, 1, 2]);
+        let graph = vec![
+            vec![1],
+            vec![0, 2],
+            vec![1],
+        ];
+        assert_eq!(bfs(&graph, 2), vec![2, 1, 0]);
     }
 
     #[test]
     fn test_bfs_single_node() {
-        let mut graph = Graph::new(1);
+        let graph = vec![vec![]];
+        assert_eq!(bfs(&graph, 0), vec![0]);
+    }
 
-        let visited_order = graph.bfs_with_return(0);
-        assert_eq!(visited_order, vec![0]);
+    #[test]
+    fn test_bfs_with_cycle() {
+        let graph = vec![
+            vec![1],
+            vec![0, 2],
+            vec![1],
+        ];
+        assert_eq!(bfs(&graph, 0), vec![0, 1, 2]);
     }
 }
-

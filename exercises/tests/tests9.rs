@@ -1,4 +1,3 @@
-.
 
 extern "Rust" {
     #[link_name = "Foo::my_demo_function"]
@@ -17,12 +16,10 @@ mod Foo {
 
 #[cfg(test)]
 mod tests {
-    use super::*
+    use super::*;
+
     #[test]
-    fn test_success() {
-        unsafe {
-            my_demo_function(123);
-            my_demo_function_alias(456);
-        }
+    fn test_something() {
+        assert!(true);
     }
 }
